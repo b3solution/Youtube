@@ -1,5 +1,5 @@
 gunicorn
-httplib2
+httplib2==0.17.2
 apiclient
 google-api-python-client
 oauth2client
