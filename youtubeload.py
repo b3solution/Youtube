@@ -55,7 +55,7 @@ app = flask.Flask(__name__)
 # Note: A secret key is included in the sample so that it works, but if you
 # use this code in your application please replace this with a truly secret
 # key. See http://flask.pocoo.org/docs/0.12/quickstart/#sessions.
-app.secret_key = 'xG9Kf5KD27iADhuF2lv5w0rq'
+app.secret_key = 'NcmV2br38vS_232JMAeQqHHW'
 
 def get_authenticated_service(args):
   flow = flow_from_clientsecrets(CLIENT_SECRETS_FILE,
