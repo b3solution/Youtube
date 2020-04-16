@@ -6,6 +6,9 @@ import os
 import random
 import sys
 import time
+from flask import Flask
+from flask import request
+
 
 from apiclient.discovery import build
 from apiclient.errors import HttpError
@@ -14,6 +17,7 @@ from oauth2client.client import flow_from_clientsecrets
 from oauth2client.file import Storage
 from oauth2client.tools import argparser, run_flow
 
+app = Flask(__name__)
 
 # Explicitly tell the underlying HTTP transport library not to retry, since
 # we are handling retry logic ourselves.
@@ -177,5 +181,6 @@ if __name__ == '__main__':
   youtube = get_authenticated_service(args)
   try:
     initialize_upload(youtube, args)
+    app.run()
   except HttpError as e:
     print ("An HTTP error %d occurred:\n%s" % (e.resp.status, e.content))
