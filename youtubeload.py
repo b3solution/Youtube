@@ -1,15 +1,23 @@
-#!/usr/bin/python
 
+# -*- coding: utf-8 -*-
+
+import os
+
+import flask
 import http.client
 import httplib2
 import os
 import random
 import sys
 import time
+import google.oauth2.credentials
+import google_auth_oauthlib.flow
+import googleapiclient.discovery
+from logging.handlers import RotatingFileHandler
+import logging
+logging.basicConfig(level=logging.DEBUG)
 from flask import Flask
 from flask import request
-
-
 from apiclient.discovery import build
 from apiclient.errors import HttpError
 from apiclient.http import MediaFileUpload
@@ -17,68 +25,44 @@ from oauth2client.client import flow_from_clientsecrets
 from oauth2client.file import Storage
 from oauth2client.tools import argparser, run_flow
 
-app = Flask(__name__)
-
-# Explicitly tell the underlying HTTP transport library not to retry, since
-# we are handling retry logic ourselves.
-httplib2.RETRIES = 1
-
-# Maximum number of times to retry before giving up.
-MAX_RETRIES = 10
-
-# Always retry when these exceptions are raised.
-RETRIABLE_EXCEPTIONS = (httplib2.HttpLib2Error, IOError, http.client.NotConnected,
-  http.client.IncompleteRead, http.client.ImproperConnectionState,
-  http.client.CannotSendRequest, http.client.CannotSendHeader,
-  http.client.ResponseNotReady, http.client.BadStatusLine)
-
-# Always retry when an apiclient.errors.HttpError with one of these status
-# codes is raised.
-RETRIABLE_STATUS_CODES = [500, 502, 503, 504]
-
 # The CLIENT_SECRETS_FILE variable specifies the name of a file that contains
 # the OAuth 2.0 information for this application, including its client_id and
-# client_secret. You can acquire an OAuth 2.0 client ID and client secret from
-# the Google API Console at
-# https://console.developers.google.com/.
-# Please ensure that you have enabled the YouTube Data API for your project.
-# For more information about using OAuth2 to access the YouTube Data API, see:
-#   https://developers.google.com/youtube/v3/guides/authentication
-# For more information about the client_secrets.json file format, see:
-#   https://developers.google.com/api-client-library/python/guide/aaa_client_secrets
-CLIENT_SECRETS_FILE = "C:/Users/shiva/Downloads/client_secret.json"
+# client_secret.
+CLIENT_SECRETS_FILE = "client_secr.json"
 
-# This OAuth 2.0 access scope allows an application to upload files to the
-# authenticated user's YouTube channel, but doesn't allow other types of access.
 YOUTUBE_UPLOAD_SCOPE = "https://www.googleapis.com/auth/youtube.upload"
 YOUTUBE_API_SERVICE_NAME = "youtube"
 YOUTUBE_API_VERSION = "v3"
+# This OAuth 2.0 access scope allows for full read/write access to the
+# authenticated user's account and requires requests to use an SSL connection.
+SCOPES = ['https://www.googleapis.com/auth/youtube.upload']
+API_SERVICE_NAME = 'youtube'
+API_VERSION = 'v3'
 
-# This variable defines a message to display if the CLIENT_SECRETS_FILE is
-# missing.
 MISSING_CLIENT_SECRETS_MESSAGE = """
 WARNING: Please configure OAuth 2.0
-
 To make this sample run you will need to populate the client_secrets.json file
 found at:
-
    %s
-
 with information from the API Console
 https://console.developers.google.com/
-
 For more information about the client_secrets.json file format, please visit:
 https://developers.google.com/api-client-library/python/guide/aaa_client_secrets
 """ % os.path.abspath(os.path.join(os.path.dirname("C:/Users/shiva/Downloads/client_secret.json"),
                                    CLIENT_SECRETS_FILE))
 
-VALID_PRIVACY_STATUSES = ("public", "private", "unlisted")
-
+app = flask.Flask(__name__)
+# Note: A secret key is included in the sample so that it works, but if you
+# use this code in your application please replace this with a truly secret
+# key. See http://flask.pocoo.org/docs/0.12/quickstart/#sessions.
+app.secret_key = 'xG9Kf5KD27iADhuF2lv5w0rq'
 
 def get_authenticated_service(args):
   flow = flow_from_clientsecrets(CLIENT_SECRETS_FILE,
     scope=YOUTUBE_UPLOAD_SCOPE,
     message=MISSING_CLIENT_SECRETS_MESSAGE)
+
+
 
   storage = Storage("%s-oauth2.json" % sys.argv[0])
   credentials = storage.get()
@@ -87,7 +71,7 @@ def get_authenticated_service(args):
     credentials = run_flow(flow, storage, args)
 
   return build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION,
-    http=credentials.authorize(httplib2.Http()))
+    http=credentials.authorize(httplib2.Http()),cache_discovery=False)
 
 def initialize_upload(youtube, options):
   tags = None
@@ -160,27 +144,119 @@ def resumable_upload(insert_request):
       sleep_seconds = random.random() * max_sleep
       print ("Sleeping %f seconds and then retrying..." % sleep_seconds)
       time.sleep(sleep_seconds)
+      
+class Argument:
+    def __init__(arg, title, description, file, category, keywords, privacyStatus, logging_level, noauth_local_webserver  ):
+       arg.title = title
+       arg.description = description
+       arg.file = file
+       arg.category = 22
+       arg.keywords = ""
+       arg.privacyStatus = "public"
+       arg.logging_level = "DEBUG"
+       arg.noauth_local_webserver = "False"
+       
+
+    
+    
+
+@app.route('/')
+def index():
+    if 'credentials' not in flask.session:
+      return flask.redirect('authorize')
+
+  # Load the credentials from the session.
+    credentials = google.oauth2.credentials.Credentials(
+      **flask.session['credentials'])
+
+    client = googleapiclient.discovery.build(
+      API_SERVICE_NAME, API_VERSION, credentials=credentials)
+      
+    titl = request.args.get('title')
+    desc = request.args.get('description')
+    fil =  request.args.get('file')
+    
+    args = Argument(titl,desc,fil,22,"","public","DEBUG","False")
+    if not os.path.exists(args.file):
+      exit("Please specify a valid file using the --file= parameter.")
+    youtube = get_authenticated_service(args)
+    try:
+     initialize_upload(youtube, args)
+     print(args.title,file=sys.stderr)
+     print('Hello world!', file=sys.stderr)
+    except HttpError as e:
+     print ("An HTTP error %d occurred:\n%s" % (e.resp.status, e.content))
+  
+  #return channels_list_by_username(client,
+  #  part='snippet,contentDetails,statistics',
+  #  forUsername='GoogleDevelopers')
+
+
+@app.route('/authorize')
+def authorize():
+  # Create a flow instance to manage the OAuth 2.0 Authorization Grant Flow
+  # steps.
+  flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
+      CLIENT_SECRETS_FILE, scopes=SCOPES)
+  flow.redirect_uri = flask.url_for('oauth2callback', _external=True)
+  authorization_url, state = flow.authorization_url(
+      # This parameter enables offline access which gives your application
+      # both an access and refresh token.
+      access_type='offline',
+      # This parameter enables incremental auth.
+      include_granted_scopes='false')
+
+  # Store the state in the session so that the callback can verify that
+  # the authorization server response.
+  flask.session['state'] = state
+  
+
+
+  return flask.redirect(authorization_url)
+
+
+@app.route('/oauth2callback')
+def oauth2callback():
+  # Specify the state when creating the flow in the callback so that it can
+  # verify the authorization server response.
+  state = flask.session['state']
+  app.logger.warning(state)
+  flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
+      CLIENT_SECRETS_FILE, scopes=SCOPES, state=state)
+  app.logger.warning(flow)    
+  flow.redirect_uri = flask.url_for('oauth2callback', _external=True)
+  app.logger.warning(flow.redirect_uri)
+  # Use the authorization server's response to fetch the OAuth 2.0 tokens.
+  authorization_response = flask.request.url
+  flow.fetch_token(authorization_response=authorization_response)
+
+  # Store the credentials in the session.
+  # ACTION ITEM for developers:
+  #     Store user's access and refresh tokens in your data store if
+  #     incorporating this code into your real app.
+  credentials = flow.credentials
+  flask.session['credentials'] = {
+      'token': credentials.token,
+      'refresh_token': credentials.refresh_token,
+      'token_uri': credentials.token_uri,
+      'client_id': credentials.client_id,
+      'client_secret': credentials.client_secret,
+      'scopes': credentials.scopes
+  }
+
+  return flask.redirect(flask.url_for('index'))
+
+def channels_list_by_username(client, **kwargs):
+  response = client.channels().list(
+    **kwargs
+  ).execute()
+
+  return flask.jsonify(**response)
+
 
 if __name__ == '__main__':
-  argparser.add_argument("--file", required=True, help="Video file to upload",default="D:/Shivratri/a.mp4")
-  argparser.add_argument("--title", help="Video title", default="Test Title")
-  argparser.add_argument("--description", help="Video description",
-    default="Test Description")
-  argparser.add_argument("--category", default="22",
-    help="Numeric video category. " +
-      "See https://developers.google.com/youtube/v3/docs/videoCategories/list")
-  argparser.add_argument("--keywords", help="Video keywords, comma separated",
-    default="")
-  argparser.add_argument("--privacyStatus", choices=VALID_PRIVACY_STATUSES,
-    default=VALID_PRIVACY_STATUSES[0], help="Video privacy status.")
-  args = argparser.parse_args()
-
-  if not os.path.exists(args.file):
-    exit("Please specify a valid file using the --file= parameter.")
-
-  youtube = get_authenticated_service(args)
-  try:
-    initialize_upload(youtube, args)
-    app.run()
-  except HttpError as e:
-    print ("An HTTP error %d occurred:\n%s" % (e.resp.status, e.content))
+ 
+  # When running locally, disable OAuthlib's HTTPs verification. When
+  # running in production *do not* leave this option enabled.
+  os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+  app.run('localhost', 8080, debug=True)
