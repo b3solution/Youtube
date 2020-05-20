@@ -1,5 +1,5 @@
 gunicorn
-httplib2==0.17.2
+httplib2==0.18.0
 Flask==1.0.2
 google_auth_oauthlib
 apiclient
